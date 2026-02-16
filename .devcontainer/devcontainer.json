@@ -10,7 +10,7 @@
             ]
         }
     },
-    "postCreateCommand": "bash install.sh",
+    "#postCreateCommand": "bash install.sh",
     "features": {
         "ghcr.io/devcontainers/features/common-utils:1": {}
     }
