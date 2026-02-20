@@ -224,7 +224,11 @@ calibration_step_callback_t position_sensor_start_calibration(void)
     ESP_LOGI(TAG, "Starting step-by-step calibration");
 
     // Инициализация zebra_enabled из Kconfig
-    calibration_zebra_enabled = CONFIG_ZEBRA_BLINDS_SUPPORT;
+#ifdef CONFIG_ZEBRA_BLINDS_SUPPORT
+    calibration_zebra_enabled = true;
+#else
+    calibration_zebra_enabled = false;
+#endif
 
     // Загружаем предыдущие значения калибровки
     nvs_handle_t nvs_handle;

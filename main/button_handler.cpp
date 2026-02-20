@@ -18,43 +18,44 @@ static QueueHandle_t g_button_event_queue = NULL;
 typedef struct
 {
     button_event_t event;
+    button_id_t button_id;
 } button_event_msg_t;
 
 // Обработчики событий для кнопки вверх
 static void button_up_single_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_SHORT_PRESS_UP};
+    button_event_msg_t msg = {.event = BUTTON_SINGLE_CLICK, .button_id = BUTTON_ID_UP};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
 static void button_up_double_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_DOUBLE_PRESS_UP};
+    button_event_msg_t msg = {.event = BUTTON_DOUBLE_CLICK, .button_id = BUTTON_ID_UP};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
 static void button_up_long_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_LONG_PRESS_UP};
+    button_event_msg_t msg = {.event = BUTTON_LONG_PRESS_START, .button_id = BUTTON_ID_UP};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
 // Обработчики событий для кнопки вниз
 static void button_down_single_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_SHORT_PRESS_DOWN};
+    button_event_msg_t msg = {.event = BUTTON_SINGLE_CLICK, .button_id = BUTTON_ID_DOWN};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
 static void button_down_double_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_DOUBLE_PRESS_DOWN};
+    button_event_msg_t msg = {.event = BUTTON_DOUBLE_CLICK, .button_id = BUTTON_ID_DOWN};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
 static void button_down_long_press_cb(void *button_handle, void *usr_data)
 {
-    button_event_msg_t msg = {.event = BUTTON_EVENT_LONG_PRESS_DOWN};
+    button_event_msg_t msg = {.event = BUTTON_LONG_PRESS_START, .button_id = BUTTON_ID_DOWN};
     xQueueSendFromISR(g_button_event_queue, &msg, NULL);
 }
 
@@ -85,7 +86,7 @@ static void check_simultaneous_press_task(void *arg)
                 if (press_duration < simultaneous_threshold)
                 {
                     // Кнопки были нажаты одновременно в течение короткого времени
-                    button_event_msg_t msg = {.event = BUTTON_EVENT_SIMULTANEOUS_PRESS};
+                    button_event_msg_t msg = {.event = (button_event_t)BUTTON_EVENT_SIMULTANEOUS_PRESS};
                     xQueueSend(g_button_event_queue, &msg, 0);
                 }
             }
@@ -182,7 +183,7 @@ void button_handler_task(void *arg)
             // Вызываем пользовательский callback если он установлен
             if (g_user_callback != NULL)
             {
-                g_user_callback(msg.event, g_user_data);
+                g_user_callback(msg.event, msg.button_id, g_user_data);
             }
         }
     }

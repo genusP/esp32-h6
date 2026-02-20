@@ -12,14 +12,13 @@ static config_t g_config = {0};
 
 // Флаги состояния
 static bool g_button_held = false;
-static motor_direction_t g_held_direction = MOTOR_DIR_STOP;
 static calibration_step_callback_t g_calibration_callback = NULL;
 
 // Задача для периодической проверки границ
 static TaskHandle_t g_boundary_check_task = NULL;
 
 // Объявления функций
-static void controller_button_callback(button_event_t event, void *user_data);
+static void controller_button_callback(button_event_t event, button_id_t button_id, void *user_data);
 static void controller_move_to_percentage(float percentage);
 static void controller_handle_zebra_offset(void);
 static bool controller_check_boundaries_and_stop(void);
@@ -155,7 +154,6 @@ void controller_stop(void)
 
     g_config.state = IDLE;
     g_button_held = false;
-    g_held_direction = MOTOR_DIR_STOP;
 }
 
 void controller_calibrate(void)
@@ -244,9 +242,9 @@ void controller_set_position_percentage(float percentage)
     }
 }
 
-static void controller_button_callback(button_event_t event, void *user_data)
+static void controller_button_callback(button_event_t event, button_id_t button_id, void *user_data)
 {
-    ESP_LOGI(TAG, "Button event: %d", event);
+    ESP_LOGI(TAG, "Button event: %d, button_id: %d", event, button_id);
 
     switch (event)
     {
@@ -266,8 +264,7 @@ static void controller_button_callback(button_event_t event, void *user_data)
         }
         break;
 
-    case BUTTON_EVENT_SHORT_PRESS_UP:
-    case BUTTON_EVENT_SHORT_PRESS_DOWN:
+    case BUTTON_SINGLE_CLICK:
         if (g_config.state == CALIBRATING && g_calibration_callback)
         {
             // Сохраняем текущую позицию для шага калибровки
@@ -295,19 +292,18 @@ static void controller_button_callback(button_event_t event, void *user_data)
         else
         {
             // Одиночное нажатие - переход в крайнее положение
-            if (event == BUTTON_EVENT_SHORT_PRESS_UP)
+            if (button_id == BUTTON_ID_UP)
             {
                 controller_goto_top();
             }
-            else
+            else if (button_id == BUTTON_ID_DOWN)
             {
                 controller_goto_bottom();
             }
         }
         break;
 
-    case BUTTON_EVENT_DOUBLE_PRESS_UP:
-    case BUTTON_EVENT_DOUBLE_PRESS_DOWN:
+    case BUTTON_DOUBLE_CLICK:
         if (g_config.state != CALIBRATING)
         {
             // Двойное нажатие
@@ -329,13 +325,19 @@ static void controller_button_callback(button_event_t event, void *user_data)
         }
         break;
 
-    case BUTTON_EVENT_LONG_PRESS_UP:
+    case BUTTON_LONG_PRESS_START:
         if (g_config.state != CALIBRATING)
         {
-            // Движение вверх пока кнопка удерживается
+            // Движение пока кнопка удерживается
             g_button_held = true;
-            g_held_direction = MOTOR_DIR_UP;
-            controller_move_up();
+            if (button_id == BUTTON_ID_UP)
+            {
+                controller_move_up();
+            }
+            else if (button_id == BUTTON_ID_DOWN)
+            {
+                controller_move_down();
+            }
 
             // Запускаем задачу проверки границ
             if (g_boundary_check_task == NULL)
@@ -345,23 +347,7 @@ static void controller_button_callback(button_event_t event, void *user_data)
         }
         break;
 
-    case BUTTON_EVENT_LONG_PRESS_DOWN:
-        if (g_config.state != CALIBRATING)
-        {
-            // Движение вниз пока кнопка удерживается
-            g_button_held = true;
-            g_held_direction = MOTOR_DIR_DOWN;
-            controller_move_down();
-
-            // Запускаем задачу проверки границ
-            if (g_boundary_check_task == NULL)
-            {
-                xTaskCreate(boundary_check_task, "boundary_check", 2048, NULL, 10, &g_boundary_check_task);
-            }
-        }
-        break;
-
-    case BUTTON_EVENT_RELEASE:
+    case BUTTON_PRESS_UP:
         if (g_button_held)
         {
             // Остановка движения при отпускании кнопки
@@ -451,18 +437,10 @@ static bool controller_check_boundaries_and_stop(void)
     uint32_t min_pos = position_sensor_get_min_position();
     uint32_t max_pos = position_sensor_get_max_position();
 
-    // Проверяем достижение верхней границы
-    if (current_pos <= min_pos && (g_config.state == MOVING_UP || g_held_direction == MOTOR_DIR_UP))
+    // Проверяем достижение границы
+    if (current_pos <= min_pos || current_pos >= max_pos)
     {
-        ESP_LOGI(TAG, "Upper boundary reached: %lu", current_pos);
-        controller_stop();
-        return true;
-    }
-
-    // Проверяем достижение нижней границы
-    if (current_pos >= max_pos && (g_config.state == MOVING_DOWN || g_held_direction == MOTOR_DIR_DOWN))
-    {
-        ESP_LOGI(TAG, "Lower boundary reached: %lu", current_pos);
+        ESP_LOGI(TAG, "%s boundary reached: %lu", current_pos >= max_pos ? "Lower" : "current_pos >= max_pos", current_pos);
         controller_stop();
         return true;
     }
